@@ -1,0 +1,33 @@
+{
+  "name": "weather-mirror",
+  "version": "0.0.1",
+  "description": "A mirror for X-Plane weather data",
+  "main": "app.js",
+  "author": {
+    "name": "Tyler Young"
+  },
+  "private": false,
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "async": "^1.5.2",
+    "compression": "^1.7.3",
+    "dotenv": "~0.4.0",
+    "express": "^4.16.4",
+    "fs-extra": "^4.0.2",
+    "heapdump": "^0.3.11",
+    "memory-cache": "^0.2.0",
+    "mkdirp": "^0.5.1",
+    "npm": "^6.7.0",
+    "request": "~2.88.0",
+    "sprintf-js": "^1.1.2",
+    "utf8": "^2.1.2",
+    "winston": "~0.9.0"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": "10.15.1",
+    "npm": "6.7.0"
+  }
+}
