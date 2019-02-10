@@ -18,6 +18,8 @@
         }
 
         defineGetRoute('/metar/:filename', noaaMirrorCtrl.metar);
+        defineGetRoute('/gfs/', noaaMirrorCtrl.gfs);
+        defineGetRoute('/wafs/', noaaMirrorCtrl.wafs);
     };
 
     /**
@@ -26,6 +28,33 @@
     noaaMirrorCtrl.metar = function(req, res) {
         const metarUrl = "https://tgftp.nws.noaa.gov/data/observations/metar/cycles/" + req.params.filename;
         noaaMirrorCtrl._mirror_url(metarUrl, 0, 15, res);
+    };
+    noaaMirrorCtrl.gfs = function(req, res) {
+        function getGfsUrl() {
+            const dateParams = noaaMirrorCtrl._getDateParams();
+            let url = sprintf("https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_1p00.pl?dir=%%2Fgfs.%s&file=gfs.t%02dz.pgrb2.1p00.f0%02d", dateParams['dateCycle'], dateParams['cycle'], dateParams['forecast']);
+            const levels = ["700_mb","250_mb"]; // 9,878 and 33,985 ft
+            levels.forEach(function(level) {
+                url += "&lev_" + level + "=1";
+            });
+            const vars = ["UGRD", "VGRD"];
+            vars.forEach(function(v) {
+                url += "&var_" + v + "=1";
+            });
+            return url;
+        }
+
+        // TODO: Serve old URL if the latest isn't available
+        noaaMirrorCtrl._mirror_url(getGfsUrl(), 3600, 0, res);
+    };
+    noaaMirrorCtrl.wafs = function(req, res) {
+        function getWafsUrl() {
+            const dateParams = noaaMirrorCtrl._getDateParams();
+            return sprintf("https://www.ftp.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.%s/WAFS_blended_%sf%02d.grib2", dateParams['dateCycle'],  dateParams['dateCycle'], dateParams['forecast']);
+        }
+
+        // TODO: Serve old URL if the latest isn't available
+        noaaMirrorCtrl._mirror_url(getWafsUrl(), 3600, 0, res);
     };
 
     noaaMirrorCtrl._cacheCreatedTime = {};
@@ -116,6 +145,27 @@
             logger.debug("Caught an error connecting to " + urlToMirror);
             errorOut(null, 404);
         }
+    };
+
+    noaaMirrorCtrl._getDateParams = function() {
+        function getDateHoursAgo(hoursAgo) {
+            const d = new Date();
+            d.setUTCHours(d.getUTCHours() - hoursAgo);
+            return d;
+        }
+        const fourHoursAgo = getDateHoursAgo(4); // NOAA delays 4 hours in publishing data
+        const cycle = Math.floor(fourHoursAgo.getUTCHours() / 6) * 6; // NOAA cycles are multiples of 6
+        const dateCycle = sprintf("%d%02d%02d%02d", fourHoursAgo.getUTCFullYear(), fourHoursAgo.getUTCMonth() + 1, fourHoursAgo.getUTCDay(), cycle);
+
+        const now = new Date();
+        const adjs = now.getUTCDay() !== fourHoursAgo.getUTCDay() ? 24 : 0;
+        const forecast = Math.floor(adjs + now.getUTCHours() - cycle) / 3 * 3;
+
+        return {
+            'dateCycle': dateCycle,
+            'forecast': forecast,
+            'cycle': cycle
+        };
     };
 })(module.exports);
 
