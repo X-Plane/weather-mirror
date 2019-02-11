@@ -41,6 +41,9 @@
 
     noaaMirrorCtrl._getWafsUrl = function(overrideDate) {
         const dateParams = noaaMirrorCtrl._getDateParams(overrideDate);
+        if (dateParams['forecast'] < 6) {
+            dateParams['forecast'] = 6; // Magic constants! What do they do? Who knows! But this matches what we previously received from the dev who integrated global winds download with X-Plane... :(
+        }
         return sprintf("https://www.ftp.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.%s/WAFS_blended_%sf%02d.grib2", dateParams['dateCycle'],  dateParams['dateCycle'], dateParams['forecast']);
     };
 
@@ -148,18 +151,18 @@
     };
 
     noaaMirrorCtrl._getDateParams = function(overrideDate) {
-        function getDateHoursAgo(hoursAgo) {
-            const d = new Date();
+        function getDateHoursAgo(hoursAgo, overrideDate) {
+            const d = overrideDate ? new Date(overrideDate.getTime()) : new Date();
             d.setUTCHours(d.getUTCHours() - hoursAgo);
             return d;
         }
-        const fourHoursAgo = getDateHoursAgo(4); // NOAA delays 4 hours in publishing data
+        const fourHoursAgo = getDateHoursAgo(4, overrideDate); // NOAA delays 4 hours in publishing data
         const cycle = Math.floor(fourHoursAgo.getUTCHours() / 6) * 6; // NOAA cycles are multiples of 6
-        const dateCycle = sprintf("%d%02d%02d%02d", fourHoursAgo.getUTCFullYear(), fourHoursAgo.getUTCMonth() + 1, fourHoursAgo.getUTCDay(), cycle);
+        const dateCycle = sprintf("%d%02d%02d%02d", fourHoursAgo.getUTCFullYear(), fourHoursAgo.getUTCMonth() + 1, fourHoursAgo.getUTCDate(), cycle);
 
-        const now = overrideDate ? overrideDate : new Date();
-        const adjs = now.getUTCDay() !== fourHoursAgo.getUTCDay() ? 24 : 0;
-        const forecast = Math.floor(adjs + now.getUTCHours() - cycle) / 3 * 3;
+        const now = overrideDate ? new Date(overrideDate.getTime()) : new Date();
+        const adjs = now.getUTCDate() === fourHoursAgo.getUTCDate() ? 0 : 24;
+        const forecast = Math.floor((adjs + now.getUTCHours() - cycle) / 3) * 3;
 
         return {
             'dateCycle': dateCycle,
@@ -174,23 +177,27 @@
     };
 
     noaaMirrorCtrl._selfTest = function() {
-        const testDate = new Date(1549760575417);
-        const gfs = noaaMirrorCtrl._getGfsUrl(testDate);
-        const correctGfs = 'https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_1p00.pl?dir=%2Fgfs.2019020918&file=gfs.t18z.pgrb2.1p00.f006&lev_700_mb=1&lev_250_mb=1&var_UGRD=1&var_VGRD=1';
-        const wafs = noaaMirrorCtrl._getWafsUrl(testDate);
-        const correctWafs = 'https://www.ftp.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.2019020918/WAFS_blended_2019020918f06.grib2';
+        const testDate = new Date(1549923284000);
+        const dateParams = noaaMirrorCtrl._getDateParams(testDate);
+        if(dateParams['dateCycle'] !== '2019021118') { throw new Error('Expected dateCycle 2019021118, got ' + dateParams['dateCycle']); }
+        if(dateParams['cycle'] !== 18) { throw new Error('Expected cycle 18, got ' + dateParams['cycle']); }
+        if(dateParams['forecast'] !== 3) { throw new Error('Expected forecast 6, got ' + dateParams['forecast']); }
 
+        const correctGfs = 'https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_1p00.pl?dir=%2Fgfs.2019021118&file=gfs.t18z.pgrb2.1p00.f003&lev_700_mb=1&lev_250_mb=1&var_UGRD=1&var_VGRD=1';
+        const gfs = noaaMirrorCtrl._getGfsUrl(testDate);
         if(gfs !== correctGfs) {
             console.error('GFS URL is wrong');
             console.error('Ours:    ' + gfs);
             console.error('Correct: ' + correctGfs);
+            throw new Error("Incorrect URLs in self-test");
         }
+
+        const correctWafs = 'https://www.ftp.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.2019021118/WAFS_blended_2019021118f06.grib2';
+        const wafs = noaaMirrorCtrl._getWafsUrl(testDate);
         if(wafs !== correctWafs) {
             console.error('WAFS URL is wrong');
             console.error('Ours:    ' + wafs);
             console.error('Correct: ' + correctWafs);
-        }
-        if(gfs !== correctGfs || wafs !== correctWafs) {
             throw new Error("Incorrect URLs in self-test");
         }
     };
