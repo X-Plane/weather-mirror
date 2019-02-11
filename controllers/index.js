@@ -5,7 +5,7 @@
         noaaMirrorController.init(app);
 
         app.use(function(req, res) {
-            res.send(404, "Not Found");
+            res.status(404).send();
         });
     };
 })(module.exports);
