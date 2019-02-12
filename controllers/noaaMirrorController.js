@@ -6,10 +6,10 @@
     const sprintf  = require('sprintf-js').sprintf;
 
     noaaMirrorCtrl.init = function(app) {
-        function defineGetRoute(urlToHandle, callback) {
+        function defineGetRoute(urlToHandle, generateMirrorUrl, callback) {
             app.get(urlToHandle, function(req, res) {
                 try {
-                    callback(req, res);
+                    noaaMirrorCtrl._mirror_url(generateMirrorUrl(), noaaMirrorCtrl._minsUntilNextHour(), res);
                 } catch(err) {
                     logger.error(urlToHandle + " - uncaught exception", err);
                     res.send(500, "An unknown error occurred");
@@ -17,27 +17,19 @@
             });
         }
 
-        defineGetRoute('/metar/:filename', noaaMirrorCtrl.metar);
-        defineGetRoute('/gfs/', noaaMirrorCtrl.gfs);
-        defineGetRoute('/wafs/', noaaMirrorCtrl.wafs);
+        defineGetRoute('/metar/', noaaMirrorCtrl._getMetarUrl);
+        defineGetRoute('/gfs/',   noaaMirrorCtrl._getGfsUrl);
+        defineGetRoute('/wafs/',  noaaMirrorCtrl._getWafsUrl);
 
         noaaMirrorCtrl._selfTest();
     };
 
-    /**
-     * Serves the METAR file from either our in-memory cache or by forwarding on the response from the NOAA server.
-     */
-    noaaMirrorCtrl.metar = function(req, res) {
-        const metarUrl = "https://tgftp.nws.noaa.gov/data/observations/metar/cycles/" + req.params.filename;
-        noaaMirrorCtrl._mirror_url(metarUrl, 15, res);
+    noaaMirrorCtrl._getMetarUrl = function(overrideDate) {
+        const d = overrideDate ? new Date(overrideDate.getTime()) : new Date();
+        const prevHour = (23 + d.getUTCHours()) % 24; // go 1 hour into the past because the current hour at this site is always 0 bytes!
+        const txtFile = sprintf("%02dZ.TXT", prevHour);
+        return "https://tgftp.nws.noaa.gov/data/observations/metar/cycles/" + txtFile;
     };
-    noaaMirrorCtrl.gfs = function(req, res) {
-        noaaMirrorCtrl._mirror_url(noaaMirrorCtrl._getGfsUrl(), noaaMirrorCtrl._minsUntilNextHour(), res);
-    };
-    noaaMirrorCtrl.wafs = function(req, res) {
-        noaaMirrorCtrl._mirror_url(noaaMirrorCtrl._getWafsUrl(), noaaMirrorCtrl._minsUntilNextHour(), res);
-    };
-
 
     noaaMirrorCtrl._getWafsUrl = function(overrideDate) {
         const dateParams = noaaMirrorCtrl._getDateParams(overrideDate);
@@ -85,21 +77,26 @@
      * @private
      */
     noaaMirrorCtrl._mirror_url = function(urlToMirror, softInvalidateMins, res) {
-        function send(text) {
-            res.setHeader('Content-type', 'text/plain');
-            res.charset = 'UTF-8';
-            res.send(text);
+        function send(headersAndData) {
+            res.set(headersAndData['headers']);
+            res.send(headersAndData['data']);
         }
-        function errorOut(fallbackText, statusCode) {
-            if(fallbackText) {
-                logger.debug("Error " + statusCode + "; sending fallback text for " + urlToMirror);
-                res.send(fallbackText);
+        function errorOut(fallbackHeadersAndData, statusCode, optionalError) {
+            if(fallbackHeadersAndData) {
+                logger.debug("Error " + statusCode + "; sending stale cache for " + urlToMirror);
+                if(optionalError) { logger.error(optionalError); }
+                send(fallbackHeadersAndData);
             } else {
                 logger.error("Error " + statusCode + "; failed to send " + urlToMirror);
+                if(optionalError) { logger.error(optionalError); }
                 res.status(statusCode).send();
             }
         }
-        function proxyLiveUrl(fallbackText) {
+        function proxyLiveUrl(fallbackHeadersAndData) {
+            function errHandler(e) {
+                logger.error("Error while updating cached copy of " + urlToMirror);
+                errorOut(fallbackHeadersAndData, 500, e);
+            }
             http.get(urlToMirror, function(proxiedResponse) {
                 if(proxiedResponse.statusCode < 400) {
                     let result = "";
@@ -107,27 +104,18 @@
                         result += chunk;
                     });
                     proxiedResponse.on('end', function() {
-                        cache.put(res.req.originalUrl, result);
+                        var responseToCache = {'headers': proxiedResponse.headers, 'data': result}
+                        cache.put(res.req.originalUrl, responseToCache);
                         noaaMirrorCtrl._cacheCreatedTime[res.req.originalUrl] = Date.now();
                         logger.debug("Successfully updated cached copy of " + urlToMirror);
-                        send(result);
+                        send(responseToCache);
                     });
-
-                    proxiedResponse.on('error', (e) => {
-                        logger.error("Error while updating cached copy of " + urlToMirror);
-                        logger.error(e);
-                        if(fallbackText) {
-                            logger.debug("Sending stale cached copy");
-                            send(fallbackText);
-                        } else {
-                            errorOut(fallbackText, 500);
-                        }
-                    })
+                    proxiedResponse.on('error', errHandler);
                 } else {
                     logger.debug("Sigh... NOAA status error updating " + urlToMirror);
-                    errorOut(fallbackText, proxiedResponse.statusCode);
+                    errorOut(fallbackHeadersAndData, proxiedResponse.statusCode);
                 }
-            });
+            }).on('error', errHandler);
         }
 
         try {
@@ -146,7 +134,7 @@
             }
         } catch(e) {
             logger.debug("Caught an error connecting to " + urlToMirror);
-            errorOut(null, 404);
+            errorOut(null, 404, e);
         }
     };
 
@@ -177,28 +165,43 @@
     };
 
     noaaMirrorCtrl._selfTest = function() {
-        const testDate = new Date(1549923284000);
-        const dateParams = noaaMirrorCtrl._getDateParams(testDate);
+        function testForDate(testDate, correctGfs, correctWafs) {
+            const gfs = noaaMirrorCtrl._getGfsUrl(testDate);
+            if(gfs !== correctGfs) {
+                console.error('GFS URL is wrong');
+                console.error('Ours:    ' + gfs);
+                console.error('Correct: ' + correctGfs);
+                throw new Error("Incorrect URLs in self-test");
+            }
+
+            const wafs = noaaMirrorCtrl._getWafsUrl(testDate);
+            if(wafs !== correctWafs) {
+                console.error('WAFS URL is wrong');
+                console.error('Ours:    ' + wafs);
+                console.error('Correct: ' + correctWafs);
+                throw new Error("Incorrect URLs in self-test");
+            }
+        }
+
+        const testDate1 = new Date(1549923284000);
+        const dateParams = noaaMirrorCtrl._getDateParams(testDate1);
         if(dateParams['dateCycle'] !== '2019021118') { throw new Error('Expected dateCycle 2019021118, got ' + dateParams['dateCycle']); }
         if(dateParams['cycle'] !== 18) { throw new Error('Expected cycle 18, got ' + dateParams['cycle']); }
         if(dateParams['forecast'] !== 3) { throw new Error('Expected forecast 6, got ' + dateParams['forecast']); }
 
-        const correctGfs = 'https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_1p00.pl?dir=%2Fgfs.2019021118&file=gfs.t18z.pgrb2.1p00.f003&lev_700_mb=1&lev_250_mb=1&var_UGRD=1&var_VGRD=1';
-        const gfs = noaaMirrorCtrl._getGfsUrl(testDate);
-        if(gfs !== correctGfs) {
-            console.error('GFS URL is wrong');
-            console.error('Ours:    ' + gfs);
-            console.error('Correct: ' + correctGfs);
-            throw new Error("Incorrect URLs in self-test");
-        }
+        testForDate(testDate1,
+            'https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_1p00.pl?dir=%2Fgfs.2019021118&file=gfs.t18z.pgrb2.1p00.f003&lev_700_mb=1&lev_250_mb=1&var_UGRD=1&var_VGRD=1',
+            'https://www.ftp.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.2019021118/WAFS_blended_2019021118f06.grib2');
 
-        const correctWafs = 'https://www.ftp.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.2019021118/WAFS_blended_2019021118f06.grib2';
-        const wafs = noaaMirrorCtrl._getWafsUrl(testDate);
-        if(wafs !== correctWafs) {
-            console.error('WAFS URL is wrong');
-            console.error('Ours:    ' + wafs);
-            console.error('Correct: ' + correctWafs);
-            throw new Error("Incorrect URLs in self-test");
+        testForDate(new Date(1550025476382), // 6 hours ago will cross the date boundary
+            'https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_1p00.pl?dir=%2Fgfs.2019021218&file=gfs.t18z.pgrb2.1p00.f006&lev_700_mb=1&lev_250_mb=1&var_UGRD=1&var_VGRD=1',
+            'https://www.ftp.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.2019021218/WAFS_blended_2019021218f06.grib2');
+        testForDate(new Date(1549992766227),
+            'https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_1p00.pl?dir=%2Fgfs.2019021212&file=gfs.t12z.pgrb2.1p00.f003&lev_700_mb=1&lev_250_mb=1&var_UGRD=1&var_VGRD=1',
+            'https://www.ftp.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.2019021212/WAFS_blended_2019021212f06.grib2');
+
+        if(noaaMirrorCtrl._getMetarUrl(new Date(1550019493626)) !== "https://tgftp.nws.noaa.gov/data/observations/metar/cycles/23Z.TXT") {
+            throw new Error("Incorrect METAR URL in self-test");
         }
     };
 })(module.exports);
