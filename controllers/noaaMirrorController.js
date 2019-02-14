@@ -100,7 +100,7 @@
                         result += chunk;
                     });
                     proxiedResponse.on('end', function() {
-                        var responseToCache = {'headers': proxiedResponse.headers, 'data': result}
+                        var responseToCache = {'headers': proxiedResponse.headers, 'data': result};
                         cache.put(res.req.originalUrl, responseToCache);
                         noaaMirrorCtrl._cacheSoftInvalidateTime[res.req.originalUrl] = Date.now() + softInvalidateMins * 60 * 1000;
                         logger.debug("Successfully updated cached copy of " + urlToMirror);
