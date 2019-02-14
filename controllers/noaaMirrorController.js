@@ -53,26 +53,22 @@
         return url;
     };
 
-    noaaMirrorCtrl._cacheCreatedTime = {};
+    noaaMirrorCtrl._cacheSoftInvalidateTime = {};
 
     // We tell memory-cache to *never* expire our stuff, so that if NOAA has extended downtime,
     // we won't expose that to our users.
     // BUT! We *do* want to update from them relatively frequently. So, we use a "soft" expiration,
     // after which we'll retry NOAA servers; in the event of failure, we continue serving whatever
     // data we had before.
-    noaaMirrorCtrl.isSoftInvalidated = function(route, softInvalidateMins) {
-        if(softInvalidateMins && softInvalidateMins > 0 &&
-                noaaMirrorCtrl._cacheCreatedTime.hasOwnProperty(route) &&
-                noaaMirrorCtrl._cacheCreatedTime[route]) {
-            const softInvalidateAfterTimestampMs = Date.now() + softInvalidateMins * 60 * 1000;
-            return noaaMirrorCtrl._cacheCreatedTime < softInvalidateAfterTimestampMs;
-        }
-        return false;
+    noaaMirrorCtrl.isSoftInvalidated = function(route) {
+        return  noaaMirrorCtrl._cacheSoftInvalidateTime.hasOwnProperty(route) &&
+                noaaMirrorCtrl._cacheSoftInvalidateTime[route] > 0 &&
+                noaaMirrorCtrl._cacheSoftInvalidateTime[route] < Date.now();
     };
 
     /**
      * @param urlToMirror {string} The URL whose plain-text response we want to forward if we grab live data
-     * @param softInvalidateMins {number} Number of minutes after which we should attempt to update our cached copy of the data (and fall back to the cache if NOAA is down); 0 or negative to never attempt an update
+     * @param softInvalidateMins {number} Number of minutes after creation when we should attempt to update our cached copy of the data (and fall back to the cache if NOAA is down); 0 or negative to never attempt an update
      * @param res The response object by which we send data to the user
      * @private
      */
@@ -106,7 +102,7 @@
                     proxiedResponse.on('end', function() {
                         var responseToCache = {'headers': proxiedResponse.headers, 'data': result}
                         cache.put(res.req.originalUrl, responseToCache);
-                        noaaMirrorCtrl._cacheCreatedTime[res.req.originalUrl] = Date.now();
+                        noaaMirrorCtrl._cacheSoftInvalidateTime[res.req.originalUrl] = Date.now() + softInvalidateMins * 60 * 1000;
                         logger.debug("Successfully updated cached copy of " + urlToMirror);
                         send(responseToCache);
                     });
@@ -121,7 +117,7 @@
         try {
             const cachedResult = cache.get(res.req.originalUrl);
             if(cachedResult) {
-                if(noaaMirrorCtrl.isSoftInvalidated(res.req.originalUrl, softInvalidateMins)) {
+                if(noaaMirrorCtrl.isSoftInvalidated(res.req.originalUrl)) {
                     logger.debug("Attempting to update cached copy of " + urlToMirror);
                     proxyLiveUrl(cachedResult);
                 } else {
