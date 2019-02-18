@@ -9,7 +9,8 @@
         function defineGetRoute(urlToHandle, generateMirrorUrl, callback) {
             app.get(urlToHandle, function(req, res) {
                 try {
-                    noaaMirrorCtrl._mirror_url(generateMirrorUrl(), noaaMirrorCtrl._minsUntilNextHour(), res);
+                    // Tyler says: check at least every 15 mins, because the NOAA data can change after the start of the hour... sigh...
+                    noaaMirrorCtrl._mirror_url(generateMirrorUrl(), Math.min(15, noaaMirrorCtrl._minsUntilNextHour()), res);
                 } catch(err) {
                     logger.error(urlToHandle + " - uncaught exception", err);
                     res.send(500, "An unknown error occurred");
