@@ -94,14 +94,14 @@
                 logger.error("Error while updating cached copy of " + urlToMirror);
                 errorOut(fallbackHeadersAndData, 500, e);
             }
-            http.get(urlToMirror, function(proxiedResponse) {
+            http.get(urlToMirror, {encoding: null}, function(proxiedResponse) {
                 if(proxiedResponse.statusCode < 400) {
-                    let result = "";
+                    const resultBuffers = []; // array of Buffer objects
                     proxiedResponse.on('data', function(chunk) {
-                        result += chunk;
+                        resultBuffers.push(chunk);
                     });
                     proxiedResponse.on('end', function() {
-                        var responseToCache = {'headers': proxiedResponse.headers, 'data': result};
+                        const responseToCache = {'headers': proxiedResponse.headers, 'data': Buffer.concat(resultBuffers)};
                         cache.put(res.req.originalUrl, responseToCache);
                         noaaMirrorCtrl._cacheSoftInvalidateTime[res.req.originalUrl] = Date.now() + softInvalidateMins * 60 * 1000;
                         logger.debug("Successfully updated cached copy of " + urlToMirror);
