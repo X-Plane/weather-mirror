@@ -1,7 +1,4 @@
-/**
- * Module dependencies.
- */
-
+// TODO: Look into using Cluster to serve on multiple cores: https://nodejs.org/api/cluster.html
 const logger = require("./utils/logger");
 const dotenv = require('dotenv');
 

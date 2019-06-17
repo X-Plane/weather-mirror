@@ -6,7 +6,7 @@
     const sprintf  = require('sprintf-js').sprintf;
 
     noaaMirrorCtrl.init = function(app) {
-        function defineGetRoute(urlToHandle, generateMirrorUrl, callback) {
+        function defineGetRoute(urlToHandle, generateMirrorUrl) {
             app.get(urlToHandle, function(req, res) {
                 try {
                     // Tyler says: check at least every 15 mins, because the NOAA data can change after the start of the hour... sigh...
@@ -37,12 +37,12 @@
         if (dateParams['forecast'] < 6) {
             dateParams['forecast'] = 6; // Magic constants! What do they do? Who knows! But this matches what we previously received from the dev who integrated global winds download with X-Plane... :(
         }
-        return sprintf("https://www.ftp.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.%s/WAFS_blended_%sf%02d.grib2", dateParams['dateCycle'],  dateParams['dateCycle'], dateParams['forecast']);
+        return sprintf("https://www.ftp.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.%s/%02d/WAFS_blended_%s%02df%02d.grib2", dateParams['dateCycle'], dateParams['cycle'], dateParams['dateCycle'], dateParams['cycle'], dateParams['forecast']);
     };
 
     noaaMirrorCtrl._getGfsUrl = function(overrideDate) {
         const dateParams = noaaMirrorCtrl._getDateParams(overrideDate);
-        let url = sprintf("https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_1p00.pl?dir=%%2Fgfs.%s&file=gfs.t%02dz.pgrb2.1p00.f0%02d", dateParams['dateCycle'], dateParams['cycle'], dateParams['forecast']);
+        let url = sprintf("https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_1p00.pl?dir=%%2Fgfs.%s/%02d&file=gfs.t%02dz.pgrb2.1p00.f0%02d", dateParams['dateCycle'], dateParams['cycle'], dateParams['cycle'], dateParams['forecast']);
         const levels = ["700_mb","250_mb"]; // 9,878 and 33,985 ft
         levels.forEach(function(level) {
             url += "&lev_" + level + "=1";
@@ -143,7 +143,7 @@
         }
         const fourHoursAgo = getDateHoursAgo(4, overrideDate); // NOAA delays 4 hours in publishing data
         const cycle = Math.floor(fourHoursAgo.getUTCHours() / 6) * 6; // NOAA cycles are multiples of 6
-        const dateCycle = sprintf("%d%02d%02d%02d", fourHoursAgo.getUTCFullYear(), fourHoursAgo.getUTCMonth() + 1, fourHoursAgo.getUTCDate(), cycle);
+        const dateCycle = sprintf("%d%02d%02d", fourHoursAgo.getUTCFullYear(), fourHoursAgo.getUTCMonth() + 1, fourHoursAgo.getUTCDate());
 
         const now = overrideDate ? new Date(overrideDate.getTime()) : new Date();
         const adjs = now.getUTCDate() === fourHoursAgo.getUTCDate() ? 0 : 24;
@@ -182,20 +182,20 @@
 
         const testDate1 = new Date(1549923284000);
         const dateParams = noaaMirrorCtrl._getDateParams(testDate1);
-        if(dateParams['dateCycle'] !== '2019021118') { throw new Error('Expected dateCycle 2019021118, got ' + dateParams['dateCycle']); }
+        if(dateParams['dateCycle'] !== '20190211') { throw new Error('Expected dateCycle 20190211, got ' + dateParams['dateCycle']); }
         if(dateParams['cycle'] !== 18) { throw new Error('Expected cycle 18, got ' + dateParams['cycle']); }
         if(dateParams['forecast'] !== 3) { throw new Error('Expected forecast 6, got ' + dateParams['forecast']); }
 
         testForDate(testDate1,
-            'https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_1p00.pl?dir=%2Fgfs.2019021118&file=gfs.t18z.pgrb2.1p00.f003&lev_700_mb=1&lev_250_mb=1&var_UGRD=1&var_VGRD=1',
-            'https://www.ftp.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.2019021118/WAFS_blended_2019021118f06.grib2');
+            'https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_1p00.pl?dir=%2Fgfs.20190211/18&file=gfs.t18z.pgrb2.1p00.f003&lev_700_mb=1&lev_250_mb=1&var_UGRD=1&var_VGRD=1',
+            'https://www.ftp.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.20190211/18/WAFS_blended_2019021118f06.grib2');
 
         testForDate(new Date(1550025476382), // 6 hours ago will cross the date boundary
-            'https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_1p00.pl?dir=%2Fgfs.2019021218&file=gfs.t18z.pgrb2.1p00.f006&lev_700_mb=1&lev_250_mb=1&var_UGRD=1&var_VGRD=1',
-            'https://www.ftp.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.2019021218/WAFS_blended_2019021218f06.grib2');
+            'https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_1p00.pl?dir=%2Fgfs.20190212/18&file=gfs.t18z.pgrb2.1p00.f006&lev_700_mb=1&lev_250_mb=1&var_UGRD=1&var_VGRD=1',
+            'https://www.ftp.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.20190212/18/WAFS_blended_2019021218f06.grib2');
         testForDate(new Date(1549992766227),
-            'https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_1p00.pl?dir=%2Fgfs.2019021212&file=gfs.t12z.pgrb2.1p00.f003&lev_700_mb=1&lev_250_mb=1&var_UGRD=1&var_VGRD=1',
-            'https://www.ftp.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.2019021212/WAFS_blended_2019021212f06.grib2');
+            'https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_1p00.pl?dir=%2Fgfs.20190212/12&file=gfs.t12z.pgrb2.1p00.f003&lev_700_mb=1&lev_250_mb=1&var_UGRD=1&var_VGRD=1',
+            'https://www.ftp.ncep.noaa.gov/data/nccf/com/gfs/prod/gfs.20190212/12/WAFS_blended_2019021212f06.grib2');
 
         if(noaaMirrorCtrl._getMetarUrl(new Date(1550019493626)) !== "https://tgftp.nws.noaa.gov/data/observations/metar/cycles/23Z.TXT") {
             throw new Error("Incorrect METAR URL in self-test");
