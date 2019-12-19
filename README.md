@@ -1,6 +1,6 @@
 # weather-mirror
 
-This is a Node.JS server used to mirror weather data used by [the X-Plane flight simulator](https://www.x-plane.com).
+This is an Elixir server used to mirror weather data used by [the X-Plane flight simulator](https://www.x-plane.com).
 
 It serves METAR weather, as well as GRIB2 winds and turbulence data acquired from NOAA.
 
