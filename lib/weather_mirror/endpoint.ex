@@ -2,22 +2,24 @@ defmodule WeatherMirror.Endpoint do
   use Plug.Router
   import ExPrintf
 
+  @listen_on_port 4001
+
   plug(:match)
   plug(:dispatch)
 
-  get("/metar/", do: mirror_url(conn, &metar_url/1))
-  get("/wafs/", do: mirror_url(conn, &wafs_url/1))
-  get("/gfs/", do: mirror_url(conn, &gfs_url/1))
+  get("/metar/", do: mirror_url(conn, "metar", &metar_url/1))
+  get("/wafs/", do: mirror_url(conn, "wafs", &wafs_url/1))
+  get("/gfs/", do: mirror_url(conn, "gfs", &gfs_url/1))
 
   match _ do
     send_resp(conn, 404, "Requested page not found.")
   end
 
-  defp mirror_url(conn, url_generator) do
+  defp mirror_url(conn, cache_key, url_generator) do
     soft_invalidate_mins = min(15, mins_until_next_hour())
     url = url_generator.(DateTime.utc_now())
 
-    case get_or_update_cached_data(url, soft_invalidate_mins) do
+    case get_or_update_cached_data(cache_key, url, soft_invalidate_mins) do
       {:error, status_code, msg} ->
         send_resp(conn, status_code, msg)
 
@@ -34,21 +36,26 @@ defmodule WeatherMirror.Endpoint do
   defp mins_until_next_hour,
     do: 60 - DateTime.utc_now().minute
 
-  defp get_or_update_cached_data(url, soft_invalidate_mins) do
-    case WeatherMirror.Cache.lookup(WeatherMirror.Cache, url) do
-      {:ok, content} -> {:ok, content}
-      {:soft_invalidated, content} -> proxy_live_url(url, soft_invalidate_mins, content)
-      _ -> proxy_live_url(url, soft_invalidate_mins)
+  defp get_or_update_cached_data(cache_key, url, soft_invalidate_mins) do
+    case WeatherMirror.Cache.lookup(cache_key) do
+      {:ok, content} ->
+        {:ok, content}
+
+      {:soft_invalidated, content} ->
+        proxy_live_url(cache_key, url, soft_invalidate_mins, content)
+
+      _ ->
+        proxy_live_url(cache_key, url, soft_invalidate_mins)
     end
   end
 
   # Returns one of:
   # {:ok, HTTPoison.Response}
   # {:error, status_code, error_message}
-  defp proxy_live_url(url, soft_invalidate_mins, fallback_response \\ nil) do
+  defp proxy_live_url(cache_key, url, soft_invalidate_mins, fallback_response \\ nil) do
     case HTTPoison.get(url) do
       {:ok, response = %HTTPoison.Response{status_code: status}} when status in 200..299 ->
-        WeatherMirror.Cache.put(WeatherMirror.Cache, url, response, soft_invalidate_mins)
+        WeatherMirror.Cache.put(cache_key, response, soft_invalidate_mins)
         {:ok, response}
 
       {:ok, _} when fallback_response ->
@@ -128,7 +135,7 @@ defmodule WeatherMirror.Endpoint do
     HTTPoison.start()
 
     Plug.Cowboy.http(__MODULE__, [],
-      port: 4001,
+      port: @listen_on_port,
       stream_handlers: [:cowboy_compress_h, WeatherMirror.StripTransferEncoding, :cowboy_stream_h]
     )
   end
