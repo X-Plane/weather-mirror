@@ -15,6 +15,7 @@ jobs:
     steps:
       - checkout
       - run: mix local.hex --force
+      - run: mix local.rebar --force  # fetch a copy of rebar (without prompt)---we need this for parse_trans
 
       - restore_cache:  # restores saved mix cache;  Read about caching dependencies: https://circleci.com/docs/2.0/caching/
           keys:  # list of cache keys, in decreasing specificity
