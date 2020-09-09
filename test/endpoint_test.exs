@@ -49,15 +49,13 @@ defmodule WeatherMirror.EndpointTest do
 
   defp status(endpoint_path) do
     response = WeatherMirror.Endpoint.call(conn(:get, endpoint_path), WeatherMirror.Endpoint.init([]))
-
-    if response.status >= 400 do
-      Logger.error("failing response body:\n#{inspect(response.resp_body, limit: :infinity)}")
-    end
-
     response.status
   end
 
   defp live_url_is_dead(noaa_url) do
-    HTTPoison.get(noaa_url).status >= 400
+    case HTTPoison.get(noaa_url) do
+      {:ok, %HTTPoison.Response{status_code: status}} -> status >= 400
+      _ -> true
+    end
   end
 end
