@@ -42,18 +42,24 @@ defmodule WeatherMirror.EndpointTest do
   end
 
   test "end to end" do
-    assert status("/metar/") == 200 || live_url_is_dead(metar_url(@now))
-    assert status("/gfs/") == 200 || live_url_is_dead(gfs_url(@now))
-    assert status("/wafs/") == 200 || live_url_is_dead(wafs_url(@now))
+    Enum.each([{"/metar/", &metar_url/1}, {"/gfs/", &gfs_url/1}, {"/wafs/", &wafs_url/1}], fn {route, url_gen} ->
+      if !live_url_is_dead(url_gen.(@now)) do
+        %{status: status, resp_headers: headers, resp_body: _} = fetch(route)
+        assert status == 200
+        refute has_cached_header(headers), "Shouldn't have this URL cached the first time"
+
+        # Second time get the cached response
+        %{status: 200, resp_headers: headers, resp_body: _} = fetch(route)
+        assert has_cached_header(headers), "Second response should have come from cache"
+      end
+    end)
   end
 
-  defp status(endpoint_path) do
-    response = WeatherMirror.Endpoint.call(conn(:get, endpoint_path), WeatherMirror.Endpoint.init([]))
-    response.status
-  end
+  defp fetch(route), do: WeatherMirror.Endpoint.call(conn(:get, route), WeatherMirror.Endpoint.init([]))
+  defp has_cached_header(headers), do: Enum.any?(headers, fn {k, _} -> k == "cached-at" end)
 
   defp live_url_is_dead(noaa_url) do
-    case HTTPoison.get(noaa_url) do
+    case HTTPoison.head(noaa_url) do
       {:ok, %HTTPoison.Response{status_code: status}} -> status >= 400
       _ -> true
     end

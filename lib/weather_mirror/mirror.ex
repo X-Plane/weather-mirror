@@ -1,6 +1,5 @@
 defmodule WeatherMirror.Mirror do
   @moduledoc "Utilities for mirroring live URLs"
-  import ExPrintf
   require Logger
 
   def mirror_url(conn, cache_key, url_generator, send_resp, merge_resp_headers) do
@@ -28,14 +27,9 @@ defmodule WeatherMirror.Mirror do
 
   defp get_or_update_cached_data(cache_key, url, soft_invalidate_mins) do
     case WeatherMirror.Cache.lookup(cache_key) do
-      {:ok, content} ->
-        {:ok, content}
-
-      {:soft_invalidated, content} ->
-        proxy_live_url(cache_key, url, soft_invalidate_mins, content)
-
-      _ ->
-        proxy_live_url(cache_key, url, soft_invalidate_mins)
+      {:ok, content} -> {:ok, content}
+      {:soft_invalidated, content} -> proxy_live_url(cache_key, url, soft_invalidate_mins, content)
+      _ -> proxy_live_url(cache_key, url, soft_invalidate_mins)
     end
   end
 
@@ -45,7 +39,7 @@ defmodule WeatherMirror.Mirror do
   defp proxy_live_url(cache_key, url, soft_invalidate_mins, fallback_response \\ nil) do
     case HTTPoison.get(url) do
       {:ok, response = %HTTPoison.Response{status_code: status}} when status in 200..299 ->
-        WeatherMirror.Cache.put(cache_key, response, soft_invalidate_mins)
+        WeatherMirror.Cache.put(cache_key, add_cached_header(response), soft_invalidate_mins)
         {:ok, response}
 
       {:ok, _} when fallback_response ->
@@ -62,5 +56,9 @@ defmodule WeatherMirror.Mirror do
           {:error, 500, "Failed to fetch weather data"}
         end
     end
+  end
+
+  defp add_cached_header(%HTTPoison.Response{headers: headers} = response) do
+    %{response | headers: [{"cached-at", DateTime.to_iso8601(DateTime.utc_now())} | headers]}
   end
 end
