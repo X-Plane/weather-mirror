@@ -7,7 +7,6 @@ orbs:
 jobs:
   build:
     docker:
-      # specify the version here
       - image: circleci/elixir:1.10.4
         environment:  # environment variables for primary container
           MIX_ENV: test
