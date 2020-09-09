@@ -1,4 +1,5 @@
 defmodule WeatherMirror.NoaaDate do
+  @moduledoc "A struct to represent the parameters that NOAA URLs all use"
   import ExPrintf
 
   @enforce_keys [:date_cycle, :forecast, :cycle]
