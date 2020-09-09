@@ -41,6 +41,7 @@ defmodule WeatherMirror.EndpointTest do
              "https://tgftp.nws.noaa.gov/data/observations/metar/cycles/23Z.TXT"
   end
 
+  @tag e2e: true
   test "end to end" do
     Enum.each([{"/metar/", &metar_url/1}, {"/gfs/", &gfs_url/1}, {"/wafs/", &wafs_url/1}], fn {route, url_gen} ->
       if !live_url_is_dead(url_gen.(@now)) do
