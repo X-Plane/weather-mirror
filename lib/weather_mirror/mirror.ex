@@ -12,16 +12,13 @@ defmodule WeatherMirror.Mirror do
 
       {_, %HTTPoison.Response{status_code: status, headers: headers, body: body}} ->
         conn
-        |> merge_resp_headers.(header_keys_lowercase(headers))
+        |> merge_resp_headers.(headers)
         |> send_resp.(status, body)
 
       _ ->
         send_resp.(conn, 500, "An unknown error occurred")
     end
   end
-
-  # NOAA sends headers with keys like "Date" and "Content-Type", but HTTPoison asserts keys have to be all lowercase
-  defp header_keys_lowercase(headers), do: Enum.map(headers, fn {k, v} -> {String.downcase(k), v} end)
 
   def mins_until_next_hour, do: 60 - DateTime.utc_now().minute
 
@@ -39,8 +36,9 @@ defmodule WeatherMirror.Mirror do
   defp proxy_live_url(cache_key, url, soft_invalidate_mins, fallback_response \\ nil) do
     case HTTPoison.get(url) do
       {:ok, response = %HTTPoison.Response{status_code: status}} when status in 200..299 ->
-        WeatherMirror.Cache.put(cache_key, add_cached_header(response), soft_invalidate_mins)
-        {:ok, response}
+        to_send = response |> header_keys_lowercase() |> strip_unwanted_noaa_headers()
+        WeatherMirror.Cache.put(cache_key, add_cached_header(to_send), soft_invalidate_mins)
+        {:ok, to_send}
 
       {:ok, _} when fallback_response ->
         {:ok, fallback_response}
@@ -60,5 +58,20 @@ defmodule WeatherMirror.Mirror do
 
   defp add_cached_header(%HTTPoison.Response{headers: headers} = response) do
     %{response | headers: [{"cached-at", DateTime.to_iso8601(DateTime.utc_now())} | headers]}
+  end
+
+  # NOAA sends headers with keys like "Date" and "Content-Type", but HTTPoison asserts keys have to be all lowercase
+  defp header_keys_lowercase(%HTTPoison.Response{headers: headers} = response) do
+    %{response | headers: Enum.map(headers, fn {k, v} -> {String.downcase(k), v} end)}
+  end
+
+  defp strip_unwanted_noaa_headers(%HTTPoison.Response{headers: headers} = response) do
+    %{response | headers: strip_unwanted_noaa_headers(headers)}
+  end
+
+  defp strip_unwanted_noaa_headers(headers) when is_list(headers) do
+    unwanted = ["transfer-encoding", "strict-transport-security"]
+    want_header = fn {k, _v} -> !Enum.member?(unwanted, k) end
+    Enum.filter(headers, want_header)
   end
 end

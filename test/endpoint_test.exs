@@ -47,17 +47,24 @@ defmodule WeatherMirror.EndpointTest do
       if !live_url_is_dead(url_gen.(@now)) do
         %{status: status, resp_headers: headers, resp_body: _} = fetch(route)
         assert status == 200
+        assert all_lowercase_headers(headers)
         refute has_cached_header(headers), "Shouldn't have this URL cached the first time"
+        refute has_transfer_encoding_header(headers), "Transfer-Encoding header will break GFS downloads; headers #{inspect(headers)}"
 
         # Second time get the cached response
         %{status: 200, resp_headers: headers, resp_body: _} = fetch(route)
+        assert all_lowercase_headers(headers)
         assert has_cached_header(headers), "Second response should have come from cache"
+        refute has_transfer_encoding_header(headers), "Transfer-Encoding header will break GFS downloads; headers #{inspect(headers)}"
       end
     end)
   end
 
   defp fetch(route), do: WeatherMirror.Endpoint.call(conn(:get, route), WeatherMirror.Endpoint.init([]))
+
+  defp all_lowercase_headers(headers), do: Enum.any?(headers, fn {k, _} -> k == String.downcase(k) end)
   defp has_cached_header(headers), do: Enum.any?(headers, fn {k, _} -> k == "cached-at" end)
+  defp has_transfer_encoding_header(headers), do: Enum.any?(headers, fn {k, _} -> k == "transfer-encoding" end)
 
   defp live_url_is_dead(noaa_url) do
     case HTTPoison.head(noaa_url) do

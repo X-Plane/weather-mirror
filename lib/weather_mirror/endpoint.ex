@@ -69,7 +69,7 @@ defmodule WeatherMirror.Endpoint do
   def start_link(_opts) do
     Plug.Cowboy.http(__MODULE__, [],
       port: @listen_on_port,
-      stream_handlers: [:cowboy_compress_h, WeatherMirror.StripTransferEncoding, :cowboy_stream_h]
+      stream_handlers: [:cowboy_compress_h, :cowboy_stream_h]
     )
   end
 end
