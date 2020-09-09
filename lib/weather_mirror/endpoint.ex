@@ -2,7 +2,7 @@ defmodule WeatherMirror.Endpoint do
   use Plug.Router
   alias WeatherMirror.NoaaDate
   import ExPrintf
-  import WeatherMirror.Mirror, only: [mirror_url: 5, get_date_params: 1]
+  import WeatherMirror.Mirror, only: [mirror_url: 5]
 
   @listen_on_port 4001
 
@@ -41,7 +41,7 @@ defmodule WeatherMirror.Endpoint do
   end
 
   def gfs_url(%DateTime{} = utc_date) do
-    date_params = get_date_params(utc_date)
+    date_params = NoaaDate.from_utc(utc_date)
 
     base_url =
       sprintf(
