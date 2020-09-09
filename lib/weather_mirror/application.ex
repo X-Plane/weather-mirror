@@ -5,6 +5,8 @@ defmodule WeatherMirror.Application do
   use Application
 
   def start(_type, _args) do
+    HTTPoison.start()
+
     children = [
       {WeatherMirror.Cache, name: WeatherMirror.Cache},
       {WeatherMirror.Endpoint, name: WeatherMirror.Endpoint}
