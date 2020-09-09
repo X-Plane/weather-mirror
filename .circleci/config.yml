@@ -36,7 +36,7 @@ jobs:
           key: v1-build-cache-{{ .Branch }}
           paths: "_build"
 
-      - run: LOG_LEVEL=warn mix test --exclude load:true --exclude ipv6:true
+      - run: LOG_LEVEL=warn mix test --exclude load:true
       - store_test_results:  # upload junit test results for display in Test Summary. More info: https://circleci.com/docs/2.0/collect-test-data/
           path: _build/test/lib/weather_mirror
 
