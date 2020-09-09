@@ -4,7 +4,7 @@ defmodule WeatherMirror.Endpoint do
   import ExPrintf
   import WeatherMirror.Mirror, only: [mirror_url: 5]
 
-  @listen_on_port 4001
+  @default_port "4001"
 
   plug(:match)
   plug(:dispatch)
@@ -68,7 +68,7 @@ defmodule WeatherMirror.Endpoint do
 
   def start_link(_opts) do
     Plug.Cowboy.http(__MODULE__, [],
-      port: @listen_on_port,
+      port: System.get_env("PORT", @default_port) |> String.to_integer(),
       stream_handlers: [:cowboy_compress_h, :cowboy_stream_h]
     )
   end
