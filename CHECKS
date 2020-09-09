@@ -1,0 +1,6 @@
+ATTEMPTS=3
+
+/metar/ KSEA
+/metar/ KBOS
+/wafs/ GRIB
+/gfs/ GRIB
