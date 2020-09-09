@@ -1,0 +1,47 @@
+# Elixir CircleCI 2.0 configuration file
+#
+# Check https://circleci.com/docs/2.0/language-elixir/ for more details
+version: 2.1
+orbs:
+  slack: circleci/slack@3.4.2
+jobs:
+  build:
+    docker:
+      # specify the version here
+      - image: circleci/elixir:1.10.4
+        environment:  # environment variables for primary container
+          MIX_ENV: test
+
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - run: mix local.hex --force
+
+      - restore_cache:  # restores saved mix cache;  Read about caching dependencies: https://circleci.com/docs/2.0/caching/
+          keys:  # list of cache keys, in decreasing specificity
+            - v1-mix-cache-{{ .Branch }}-{{ checksum "mix.lock" }}
+            - v1-mix-cache-{{ .Branch }}
+            - v1-mix-cache
+      - restore_cache:  # restores saved build cache
+          keys:
+            - v1-build-cache-{{ .Branch }}
+            - v1-build-cache
+
+      - run: ulimit -n 4096
+      - run: mix do deps.get, compile
+      - save_cache:  # generate and store mix cache
+          key: v1-mix-cache-{{ .Branch }}-{{ checksum "mix.lock" }}
+          paths: "deps"
+      - save_cache: # don't forget to save a *build* cache, too
+          key: v1-build-cache-{{ .Branch }}
+          paths: "_build"
+
+      - run: LOG_LEVEL=warn mix test --exclude load:true --exclude ipv6:true
+      - store_test_results:  # upload junit test results for display in Test Summary. More info: https://circleci.com/docs/2.0/collect-test-data/
+          path: _build/test/lib/weather_mirror
+
+      - run: mix format --check-formatted
+      - run: bash -c "mix credo --strict --ignore tagtodo ; if [[ \$? -ge 16 ]] ; then exit 1 ; else exit 0 ; fi"
+
+      - slack/status:
+          fail_only: true
