@@ -1,6 +1,7 @@
 defmodule WeatherMirror.EndpointTest do
   use ExUnit.Case, async: true
   use Plug.Test
+  require Logger
   import WeatherMirror.Endpoint, only: [gfs_url: 1, wafs_url: 1, metar_url: 1]
 
   # 2019-02-11 22:14Z
@@ -9,6 +10,7 @@ defmodule WeatherMirror.EndpointTest do
   @early DateTime.from_unix!(1_550_025_476)
   # 2019-02-12 17:32Z
   @mid DateTime.from_unix!(1_549_992_766)
+  @now DateTime.utc_now()
 
   test "generates GFS URLs" do
     assert gfs_url(@late) ==
@@ -37,5 +39,25 @@ defmodule WeatherMirror.EndpointTest do
 
     assert metar_url(test_date) ==
              "https://tgftp.nws.noaa.gov/data/observations/metar/cycles/23Z.TXT"
+  end
+
+  test "end to end" do
+    assert status("/metar/") == 200 || live_url_is_dead(metar_url(@now))
+    assert status("/gfs/") == 200 || live_url_is_dead(gfs_url(@now))
+    assert status("/wafs/") == 200 || live_url_is_dead(wafs_url(@now))
+  end
+
+  defp status(endpoint_path) do
+    response = WeatherMirror.Endpoint.call(conn(:get, endpoint_path), WeatherMirror.Endpoint.init([]))
+
+    if response.status >= 400 do
+      Logger.error("failing response body:\n#{inspect(response.resp_body, limit: :infinity)}")
+    end
+
+    response.status
+  end
+
+  defp live_url_is_dead(noaa_url) do
+    HTTPoison.get(noaa_url).status >= 400
   end
 end

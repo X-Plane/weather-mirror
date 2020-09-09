@@ -55,7 +55,12 @@ defmodule WeatherMirror.Mirror do
         {:error, err_status, "Weather data unavailable"}
 
       error ->
+        if fallback_response do
+          {:ok, fallback_response}
+        else
+          Logger.error("Totally failed to fetch weather data from #{url}\n#{inspect(error)}")
           {:error, 500, "Failed to fetch weather data"}
+        end
     end
   end
 
