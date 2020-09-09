@@ -23,11 +23,11 @@ defmodule WeatherMirror.MixProject do
   defp deps do
     [
       {:plug, "~> 1.9.0"},
-      {:cowboy, "~> 2.7"},
-      {:plug_cowboy, "~> 2.0"},
+      {:cowboy, "~> 2.8"},
+      {:plug_cowboy, "~> 2.3.0"},
       {:exprintf, "~> 0.2.1"},
-      {:httpoison, "~> 1.6"},
-      {:credo, "~> 1.2.0", only: [:dev, :test], runtime: false}
+      {:httpoison, "~> 1.7"},
+      {:credo, "~> 1.2.3", only: [:dev, :test], runtime: false}
     ]
   end
 end
