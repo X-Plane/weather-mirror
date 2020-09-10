@@ -6,6 +6,7 @@ defmodule WeatherMirror.Endpoint do
 
   @default_port "4001"
 
+  plug(Plug.Head)
   plug(:match)
   plug(:dispatch)
 

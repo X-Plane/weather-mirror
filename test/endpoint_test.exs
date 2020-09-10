@@ -56,6 +56,8 @@ defmodule WeatherMirror.EndpointTest do
         assert all_lowercase_headers(headers)
         assert has_cached_header(headers), "Second response should have come from cache"
         refute has_transfer_encoding_header(headers), "Transfer-Encoding header will break GFS downloads; headers #{inspect(headers)}"
+
+        {:ok, %HTTPoison.Response{status_code: 200}} = HTTPoison.head("http://localhost:#{System.get_env("PORT") || 4001}#{route}")
       end
     end)
   end
