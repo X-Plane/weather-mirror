@@ -1,3 +1,4 @@
+WAIT=30
 ATTEMPTS=3
 
 /metar/ KSEA
