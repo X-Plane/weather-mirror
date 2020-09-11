@@ -38,7 +38,7 @@ defmodule WeatherMirror.AutoUpdatingUrlCache do
 
   @impl GenServer
   def handle_call(:lookup, _from, {url_generator, _, _} = state) do
-    Logger.warn("No data yet for #{url_generator.(DateTime.utc_now())}")
+    Logger.debug("No data yet for #{url_generator.(DateTime.utc_now())}")
     {:reply, :error, state}
   end
 
