@@ -5,6 +5,7 @@ defmodule WeatherMirror.AutoUpdatingUrlCache do
   Instead we just keep trying to update them in the background.
   """
   use GenServer
+  require Logger
 
   def start_link(name, url_generator, update_ms \\ 3 * 60_000)
       when is_atom(name) and is_function(url_generator) and is_integer(update_ms) do
@@ -21,7 +22,13 @@ defmodule WeatherMirror.AutoUpdatingUrlCache do
   ################ Server Implementation ################
   @impl GenServer
   def init({url_generator, update_ms}) when is_function(url_generator) and is_integer(update_ms) do
-    {:ok, update({url_generator, update_ms, nil})}
+    # Try to initialize with the latest data; if that fails, try to grab the data from the previous hour, just so we have *something*.
+    initial_state = {url_generator, update_ms, nil}
+
+    case update(initial_state) do
+      {_, _, %HTTPoison.Response{}} = state -> {:ok, state}
+      _ -> {:ok, update(initial_state, DateTime.add(DateTime.utc_now(), -60 * 60, :second))}
+    end
   end
 
   @impl GenServer
@@ -30,7 +37,8 @@ defmodule WeatherMirror.AutoUpdatingUrlCache do
   end
 
   @impl GenServer
-  def handle_call(:lookup, _from, state) do
+  def handle_call(:lookup, _from, {url_generator, _, _} = state) do
+    Logger.warn("No data yet for #{url_generator.(DateTime.utc_now())}")
     {:reply, :error, state}
   end
 
@@ -39,22 +47,23 @@ defmodule WeatherMirror.AutoUpdatingUrlCache do
     {:noreply, update(state)}
   end
 
-  defp update({url_generator, update_ms, prev_content} = _state) do
-    url = url_generator.(DateTime.utc_now())
-    updated_content = update(url, prev_content)
+  defp update({url_generator, update_ms, prev_content} = _state, time \\ DateTime.utc_now()) do
+    url = url_generator.(time)
+    updated_content = fetch_with_fallback(url, prev_content)
     {:ok, _timer_id} = :timer.send_after(update_ms, :update)
     {url_generator, update_ms, updated_content}
   end
 
-  defp update(url, prev_response \\ nil) when is_bitstring(url) do
-    case HTTPoison.get(url, [], follow_redirect: true, recv_timeout: 15_000) do
+  defp fetch_with_fallback(url, prev_response) when is_bitstring(url) do
+    case HTTPoison.get(url, [], follow_redirect: true, recv_timeout: 30_000) do
       {:ok, %HTTPoison.Response{status_code: status} = response} when status < 300 ->
         response
         |> header_keys_lowercase()
         |> strip_unwanted_noaa_headers()
         |> add_cached_header()
 
-      _ ->
+      e ->
+        Logger.warn("Failed to grab #{url}\n#{inspect(e)}")
         prev_response
     end
   end
