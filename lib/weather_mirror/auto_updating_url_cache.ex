@@ -58,10 +58,19 @@ defmodule WeatherMirror.AutoUpdatingUrlCache do
     {:noreply, updated_state}
   end
 
-  defp update({url_generator, update_ms, prev_content} = _state, for_time \\ DateTime.utc_now()) do
+  defp update({url_generator, update_ms, prev_content} = state, for_time \\ DateTime.utc_now()) do
     url = url_generator.(for_time)
-    {url_generator, update_ms, fetch_with_fallback(url, prev_content)}
+    new_content = fetch_with_fallback(url, prev_content)
+
+    if new_content && content_changed(prev_content, new_content) do
+      {url_generator, update_ms, new_content}
+    else
+      state
+    end
   end
+
+  defp content_changed(%HTTPoison.Response{body: old}, %HTTPoison.Response{body: new}), do: old != new
+  defp content_changed(old, new), do: old != new
 
   defp fetch_with_fallback(url, prev_response) when is_bitstring(url) do
     case HTTPoison.get(url, [], follow_redirect: true, recv_timeout: 30_000) do
