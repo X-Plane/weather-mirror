@@ -6,6 +6,7 @@ defmodule WeatherMirror.AutoUpdatingUrlCache do
   """
   use GenServer
   require Logger
+  @timeout_ms 30_000
 
   def start_link(name, url_generator, update_ms \\ 3 * 60_000)
       when is_atom(name) and is_function(url_generator) and is_integer(update_ms) do
@@ -15,9 +16,10 @@ defmodule WeatherMirror.AutoUpdatingUrlCache do
   @doc """
   Looks up the server's latest cached content.
   Returns `HTTPoison.Response{}` if we have any cached content, or `:error` if we have no cached content.
+  We give a long timeout in case an update is in progress (and must finish before we can return).
   """
-  def get(cache_pid) when is_pid(cache_pid), do: GenServer.call(cache_pid, :lookup)
-  def get(cache_name) when is_atom(cache_name), do: GenServer.call(via_tuple(cache_name), :lookup)
+  def get(cache_pid) when is_pid(cache_pid), do: GenServer.call(cache_pid, :lookup, @timeout_ms)
+  def get(cache_name) when is_atom(cache_name), do: GenServer.call(via_tuple(cache_name), :lookup, @timeout_ms)
 
   ################ Server Implementation ################
   @impl GenServer
@@ -26,8 +28,15 @@ defmodule WeatherMirror.AutoUpdatingUrlCache do
     initial_state = {url_generator, update_ms, nil}
 
     case update(initial_state) do
-      {_, _, %HTTPoison.Response{}} = state -> {:ok, state}
-      _ -> {:ok, update(initial_state, DateTime.add(DateTime.utc_now(), -60 * 60, :second))}
+      {_, _, %HTTPoison.Response{}} = state ->
+        {:ok, _timer_id} = :timer.send_after(update_ms, :update)
+        {:ok, state}
+
+      _ ->
+        hour_ago = DateTime.add(DateTime.utc_now(), -60 * 60, :second)
+        state = update(initial_state, hour_ago)
+        {:ok, _timer_id} = :timer.send_after(update_ms, :update)
+        {:ok, state}
     end
   end
 
@@ -43,15 +52,15 @@ defmodule WeatherMirror.AutoUpdatingUrlCache do
   end
 
   @impl GenServer
-  def handle_info(:update, {_url_generator, _update_ms, _content} = state) do
-    {:noreply, update(state)}
+  def handle_info(:update, {_url_generator, update_ms, _content} = state) do
+    updated_state = update(state)
+    {:ok, _timer_id} = :timer.send_after(update_ms, :update)
+    {:noreply, updated_state}
   end
 
-  defp update({url_generator, update_ms, prev_content} = _state, time \\ DateTime.utc_now()) do
-    url = url_generator.(time)
-    updated_content = fetch_with_fallback(url, prev_content)
-    {:ok, _timer_id} = :timer.send_after(update_ms, :update)
-    {url_generator, update_ms, updated_content}
+  defp update({url_generator, update_ms, prev_content} = _state, for_time \\ DateTime.utc_now()) do
+    url = url_generator.(for_time)
+    {url_generator, update_ms, fetch_with_fallback(url, prev_content)}
   end
 
   defp fetch_with_fallback(url, prev_response) when is_bitstring(url) do
