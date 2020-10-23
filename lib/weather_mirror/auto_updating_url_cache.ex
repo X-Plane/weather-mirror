@@ -80,6 +80,17 @@ defmodule WeatherMirror.AutoUpdatingUrlCache do
         |> strip_unwanted_noaa_headers()
         |> add_cached_header()
 
+      {:error, %HTTPoison.Error{reason: :checkout_timeout}} ->
+          Logger.warn("Failed to grab #{url} due to :checkout_timeout error; rebooting pool")
+          # Workaround for https://github.com/edgurgel/httpoison/issues/414
+          # Without this, after we hit a few HTTP errors (which of course NOAA serves
+          # us a lot, that's the whole point of this proxy), all (?) future downloads
+          # fail with this error:
+          # {:error, %HTTPoison.Error{id: nil, reason: :checkout_timeout}}
+          # More info: https://github.com/benoitc/hackney/issues/643
+          :hackney_pool.stop_pool(:default)
+          prev_response
+
       e ->
         Logger.warn("Failed to grab #{url}\n#{inspect(e)}")
         prev_response
