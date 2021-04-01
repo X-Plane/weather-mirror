@@ -4,7 +4,7 @@ defmodule WeatherMirror.MixProject do
   def project do
     [
       app: :weather_mirror,
-      version: "0.4.1",
+      version: "0.5.0",
       elixir: "~> 1.10",
       start_permanent: Mix.env() == :prod,
       deps: deps()
@@ -14,7 +14,7 @@ defmodule WeatherMirror.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger],
+      extra_applications: [:logger, :appsignal],
       mod: {WeatherMirror.Application, []}
     ]
   end
@@ -22,6 +22,8 @@ defmodule WeatherMirror.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:appsignal, "~> 2.0"},
+      {:jason, "~> 1.1"},
       {:plug, "~> 1.9.0"},
       {:cowboy, "~> 2.8"},
       {:plug_cowboy, "~> 2.3.0"},

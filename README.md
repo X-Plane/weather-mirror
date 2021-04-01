@@ -14,6 +14,30 @@ You can see the three URLs it mirrors at:
 - [lookup.x-plane.com/\_lookup\_11\_/weather/gfs/](http://lookup.x-plane.com/_lookup_11_/weather/gfs/)
 - [lookup.x-plane.com/\_lookup\_11\_/weather/wafs/](http://lookup.x-plane.com/_lookup_11_/weather/wafs/)
 
+## Dev setup
+
+You'll need Elixir and rebar3 (an Erlang build system required for one of our dependencies) installed. On Mac, you can use Homebrew to get both:
+
+    $ brew install elixir
+    $ brew install rebar3
+
+Then you can run it like any other Elixir project:
+
+1. Fetch the dependencies: `$ mix deps.get && mix deps.compile`
+2. Launch it: `$ iex -S mix`
+3. Visit the proxy in your browser—it'll run on the `@default_port` defined in `application.ex`: `$ open http://localhost:4001`
+
+## Environment variables required for monitoring
+
+AppSignal requires a handful of environment variables to be set for the config. We have these configured on the production Dokku server, but if you want to test AppSignal locally, you'll need to set them up yourself.
+
+    export APPSIGNAL_OTP_APP="weather_mirror"
+    export APPSIGNAL_APP_NAME="WeatherMirror"
+    export APPSIGNAL_APP_ENV="dev"
+    export APPSIGNAL_PUSH_API_KEY="your-push-api-key"
+
+(The final one is the secret, and sensitive one—since this is an open source project, we can't commit it to Git in the Intellij config.)
+
 ## Architecture
 
 This is a pretty simple application. The architecture, such as it is, looks like this:
@@ -28,6 +52,8 @@ We deploy via [Dokku](http://dokku.viewdocs.io/dokku/) (a self-hosted Heroku-lik
 
     $ git remote add dokku ssh://dokku@weather.x-plane.com/weather_mirror
     $ git push dokku main:master
+
+(Note that the Dokku server already has the [environment variables required for AppSignal monitoring](#Environment-variables-required-for-monitoring) configured.)
 
 There's one *terribly* frustrating aspect of deployment: as part of our zero-downtime checks (see the `CHECKS` file in the project root), we test that the newly spun-up server actually has data for all three endpoints. Seems simple, but you would be *amazed* at how many times I have to retry this due to NOAA not being able to return an HTTP 200. In the past, I've had to retry this a dozen times before I could get an HTTP 200 on all three at the same time. (Did I mention how unreliable X-Plane's weather data was before we had a caching proxy in front of NOAA?)
 

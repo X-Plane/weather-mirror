@@ -8,6 +8,7 @@ defmodule WeatherMirror.Application do
 
   def start(_type, _args) do
     HTTPoison.start()
+    {:ok, _} = Application.ensure_all_started(:appsignal)
 
     children = [
       {Registry, keys: :unique, name: WeatherMirror.AutoUpdatingUrlCache},
