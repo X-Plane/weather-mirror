@@ -1,0 +1,7 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Elixir Tests" type="MixExUnitRunConfigurationType" factoryName="Elixir Mix ExUnit">
+    <working-directory url="file://$PROJECT_DIR$/" />
+    <module-filters inherit-application-module-filters="true" />
+    <method v="2" />
+  </configuration>
+</component>

@@ -1,0 +1,16 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Elixir Server" type="MixRunConfigurationType" factoryName="Elixir Mix">
+    <mix>
+      <argument>run</argument>
+      <argument>--no-halt</argument>
+    </mix>
+    <working-directory url="file://$PROJECT_DIR$/" />
+    <envs>
+      <env name="APPSIGNAL_OTP_APP" value="weather_mirror" />
+      <env name="APPSIGNAL_APP_NAME" value="WeatherMirror" />
+      <env name="APPSIGNAL_APP_ENV" value="dev" />
+    </envs>
+    <module-filters inherit-application-module-filters="true" />
+    <method v="2" />
+  </configuration>
+</component>
